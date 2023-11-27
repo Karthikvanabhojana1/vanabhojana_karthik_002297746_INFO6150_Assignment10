@@ -15,6 +15,7 @@ const Weather = () => {
     feelsLike: '',
   });
   const navigate = useNavigate();
+  var minValue;
   const weatherImages = {
     Clear: ImagesClear,
     Clouds: ImagesClouds,
@@ -29,6 +30,7 @@ const Weather = () => {
 
       try {
         const response = await axios.get(apiUrl);
+        console.log(response.data)
         const datamanage = managedata(response.data);
         setWeatherData(datamanage);
 
@@ -39,28 +41,55 @@ const Weather = () => {
     const roundTemperature = (temperature) => {
       return Math.round(temperature);
     };
+
+    const getMinValue = (currentValue, previousMin) => {
+      return currentValue < previousMin ? currentValue : previousMin;
+    };
     
     const managedata = (data) => {
-      
-      let filteredWeather = data.list.filter((weather) => weather.dt_txt.includes('12:00:00'));
-      // const myArray = 
-      const dateString = data.dt_txt;
-      const dateObject = new Date(dateString);
-      const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const dayIndex = dateObject.getDay();
-      const dayName = daysOfWeek[dayIndex];
-      let weathers = filteredWeather.map((weather) => ({
-        Date: weather.dt_txt,
-        Day: dayName,
-        lowest: roundTemperature((9 / 5) * (weather.main.temp_min - 273.15) + 32),
-        High: roundTemperature((9 / 5) * (weather.main.temp_max - 273.15) + 32),
-        feelsLike: roundTemperature((9 / 5) * (weather.main.feels_like - 273.15) + 32),
-        type: weather.weather[0].main,
-      }));
-
+      const currentDate = new Date();
+      currentDate.setHours(0, 0, 0, 0); 
+    
+      const filteredWeather = data.list.filter((weather) => {
+        const weatherDate = new Date(weather.dt_txt.split(' ')[0]);
+        return weatherDate >= currentDate && weatherDate <= new Date(currentDate.getTime() + 5 * 24 * 60 * 60 * 1000);
+      });
+    
+      const groupedByDate = filteredWeather.reduce((result, weather) => {
+        const date = weather.dt_txt.split(' ')[0]; 
+        if (!result[date]) {
+          result[date] = [];
+        }
+        result[date].push(weather);
+        return result;
+      }, {});
+    
+      const weathers = Object.keys(groupedByDate).map((dateString) => {
+        const dailyWeather = groupedByDate[dateString];
+    
+        const dateObject = new Date(dateString);
+        const daysOfWeek = [ "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday","Sunday"];
+        const dayIndex = dateObject.getDay();
+        const dayName = daysOfWeek[dayIndex];
+        const minTemp = Math.min(...dailyWeather.map((weather) => weather.main.temp_min));
+        const maxTemp = Math.max(...dailyWeather.map((weather) => weather.main.temp_max));
+    
+        return {
+          Date: dateString,
+          Day: dayName,
+          lowest: roundTemperature((9 / 5) * (minTemp - 273.15) + 32),
+          High: roundTemperature((9 / 5) * (maxTemp - 273.15) + 32),
+          feelsLike: roundTemperature((9 / 5) * (dailyWeather[0].main.feels_like - 273.15) + 32),
+          type: dailyWeather[0].weather[0].main,
+        };
+      });
+    
+      console.log("Hello", weathers);
+    
       return weathers;
     };
-
+    
+   
     fetchData();
   }, []);
 
@@ -95,6 +124,7 @@ return (
         {weatherData.map((weather, index) => (
           <div key={index} className="card-wrapper" onClick={() => handleCardClick(weather)}>
             <h3>{weather.Date.split(" ")[0]}</h3>
+            <h4>{weather.Day}</h4>
             {generateCard('High', weather.High)}
               {generateCard('Low', weather.lowest)}
               {generateCard('Feels Like', weather.feelsLike)}
